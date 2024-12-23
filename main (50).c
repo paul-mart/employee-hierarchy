@@ -2,287 +2,197 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct treenode {
-    struct treenode* firstchild;
-    struct treenode* sibling;
-    int ID;
+// Define the structure for a tree node
+typedef struct TreeNode {
+    int id;
     char name[1001];
-} treenode;
+    struct TreeNode* parent;
+    struct TreeNode* children;
+    struct TreeNode* next;
+} TreeNode;
 
-treenode* createNode(int idnumber, char employeename[])
-{
-    treenode* new = (treenode*)malloc(sizeof(treenode)); // allocate space for node
-    if(new != NULL) {  //if allocation successful, do this:
-    new->ID = idnumber;
-    strncpy(new->name, employeename, sizeof(new->name) - 1);
-    new->name[sizeof(new->name) - 1] = '\0'; // Ensure null-termination
-    new->firstchild = NULL;
-    new->sibling = NULL;
+// Create a new tree node
+TreeNode* createNode(int id, const char* name) {
+    TreeNode* node = (TreeNode*)malloc(sizeof(TreeNode));
+    if (!node) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
     }
-    
-    return new; //return node or NULL depending on if allocation worked
-
+    node->id = id;
+    strcpy(node->name, name);
+    node->parent = NULL;
+    node->children = NULL;
+    node->next = NULL;
+    return node;
 }
 
-
-// Find a node by it's ID in the tree
-treenode* findNode(treenode* root, int targetID)
-{
-    if(root == NULL) { return NULL; } // if no root
-    if(root->ID == targetID) { return root; } // found employee!
-
-    // Recursively search the 1st child
-    treenode* res = findNode(root->firstchild, targetID);
-    if (res != NULL) return res; // If found in children, return it
-    //If not, ->
-    // Search for siblings recursively
-    return findNode(root->sibling, targetID);
-}
-
-// Add a node Y as a child of X 
-void addNode(treenode* parent, treenode* child) {
-    if (parent->firstchild == NULL) { // if the parent doesnt have any children
-        parent->firstchild = child; } // child we wanted to add is now the 1st child
-     else //parent has a child or children
-     {
-        treenode* temp = parent->firstchild; // make temp node ptr to first child of parent
-        while (temp->sibling != NULL) { // loop through all children until reaching end
-            temp = temp->sibling; // Move to the last sibling
-        }
-        temp->sibling = child; // Add as a sibling
+// Add a child node to a parent
+void addChild(TreeNode* parent, TreeNode* child) {
+    if (!parent || !child) {
+        fprintf(stderr, "Invalid ADD operation: parent or child is NULL\n");
+        return;
     }
+    child->parent = parent;
+    child->next = parent->children;
+    parent->children = child;
 }
 
-// Function to find a node and its parent
-void findNodeAndParent(treenode* root, int targetID, treenode** parent, treenode** target) {
-    if (root == NULL) return;
-
-    treenode* current = root->firstchild;  // Start with the first child
-    while (current != NULL) {
-        if (current->ID == targetID) {
-            *target = current;
-            return;
-        }
-        if (current->firstchild != NULL) {
-            *parent = root;
-            findNodeAndParent(current, targetID, parent, target);
-        }
-        current = current->sibling;  // Move to siblings
+// Find a node by ID
+TreeNode* findNode(TreeNode* root, int id) {
+    if (!root) return NULL;
+    if (root->id == id) return root;
+    TreeNode* child = root->children;
+    while (child) {
+        TreeNode* result = findNode(child, id);
+        if (result) return result;
+        child = child->next;
     }
+    return NULL;
 }
 
-// Function to remove a node
-void removeNode(treenode* root, int targetID) {
-    if (root == NULL || targetID == 0) return;  // Do not remove root or handle NULL tree
-
-    treenode* parent = NULL;
-    treenode* target = NULL;
-
-    // Step 1: Find the target node and its parent
-    findNodeAndParent(root, targetID, &parent, &target);
-    if (target == NULL) return;  // Node not found
-
-    // Step 2: Handle case where target has no children
-    if (target->firstchild == NULL) {
-        // Unlink target from parent
-        if (parent->firstchild == target) {
-            parent->firstchild = target->sibling;
-        } else {
-            treenode* temp = parent->firstchild;
-            while (temp->sibling != target) temp = temp->sibling;
-            temp->sibling = target->sibling;
-        }
-        free(target);  // Free the target node
+// Remove a node and promote its children
+void removeNode(TreeNode* root, int id) {
+    TreeNode* node = findNode(root, id);
+    if (!node || node->parent == NULL) {
+        fprintf(stderr, "Invalid REMOVE operation: node not found or root node cannot be removed\n");
         return;
     }
 
-    // Step 3: Promote the child with the smallest ID
-    treenode* promoted = target->firstchild;
-    treenode* prev = NULL;
-    treenode* temp = target->firstchild;
+    TreeNode* parent = node->parent;
+    TreeNode* child = node->children;
 
-    // Find the child with the smallest ID
-    while (temp != NULL) {
-        if (temp->ID < promoted->ID) {
-            promoted = temp;
-        }
-        temp = temp->sibling;
-    }
-
-    // Step 4: Rebuild the siblings excluding the promoted child
-    temp = target->firstchild;
-    treenode* newSiblings = NULL;
-    treenode* lastSibling = NULL;
-
-    while (temp != NULL) {
-        if (temp != promoted) {
-            if (newSiblings == NULL) {
-                newSiblings = temp;
-                lastSibling = temp;
-            } else {
-                lastSibling->sibling = temp;
-                lastSibling = temp;
-            }
-        }
-        temp = temp->sibling;
-    }
-    if (lastSibling != NULL) lastSibling->sibling = NULL;
-
-    // Step 5: Relink promoted child
-    promoted->sibling = target->sibling;  // Promoted takes over target's position
-    promoted->firstchild = newSiblings;   // Attach remaining children as siblings
-
-    if (parent->firstchild == target) {
-        parent->firstchild = promoted;
+    if (parent->children == node) {
+        parent->children = node->next;
     } else {
-        temp = parent->firstchild;
-        while (temp->sibling != target) temp = temp->sibling;
-        temp->sibling = promoted;
-    }
-
-    free(target);  // Free the removed node
-
-}
-
-void printChildrenOf(treenode* parent)
-{
-    if(parent->firstchild == NULL) { return;}
-    
-    treenode curr* = parent->firstchild;
-    
-    printf("%s", curr);
-    
-}
-
-void executeCommand(treenode* root, char command[], int x, int y) {
-    if (strcmp(command, "ADD") == 0) {
-        treenode* parent = findNode(root, x);
-        treenode* child = createNode(y, "Placeholder"); // Replace with actual name from input
-        addNode(parent, child);
-    } else if (strcmp(command, "REMOVE") == 0) {
-        removeNode(root, x);
-    } else if (strcmp(command, "MOVE") == 0) {
-        treenode* parent = findNode(root, x);
-        treenode* child = findNode(root, y);
-        moveNode(parent, child);
-    } else if (strcmp(command, "SORT_ID") == 0) {
-        treenode* parent = findNode(root, x);
-        sortbyID(parent);
-    } else if (strcmp(command, "SORT_NAME") == 0) {
-        treenode* parent = findNode(root, x);
-        sortByName(parent);
-    } else if (strcmp(command, "PRINT") == 0) {
-        treenode* parent = findNode(root, x);
-        treenode* temp = parent->firstchild;
-        while (temp != NULL) {
-            printf("%s", temp->name);
-            if (temp->sibling != NULL) printf(",");
-            temp = temp->sibling;
+        TreeNode* sibling = parent->children;
+        while (sibling && sibling->next != node) {
+            sibling = sibling->next;
         }
-        printf("\n");
+        if (sibling) sibling->next = node->next;
     }
+
+    while (child) {
+        TreeNode* nextChild = child->next;
+        addChild(parent, child);
+        child = nextChild;
+    }
+
+    free(node);
 }
 
-void sortByName(treenode* parent) {
-    if (parent == NULL || parent->firstchild == NULL) return;
-
-    treenode* childList[100]; // Adjust size or dynamically allocate if necessary
-    int count = 0;
-
-    // Collect all children in an array
-    treenode* temp = parent->firstchild;
-    while (temp != NULL) {
-        childList[count++] = temp;
-        temp = temp->sibling;
+// Print the children of a node
+void printChildren(TreeNode* node) {
+    if (!node) {
+        fprintf(stderr, "Invalid PRINT operation: node not found\n");
+        return;
     }
+    TreeNode* child = node->children;
+    int first = 1;
+    while (child) {
+        if (!first) printf(",");
+        printf("%s", child->name);
+        first = 0;
+        child = child->next;
+    }
+    printf("\n");
+}
 
-    // Sort array by name
-    for (int i = 0; i < count - 1; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (strcmp(childList[i]->name, childList[j]->name) > 0) {
-                treenode* swap = childList[i];
-                childList[i] = childList[j];
-                childList[j] = swap;
+// Sort children by ID
+void sortChildrenById(TreeNode* parent) {
+    if (!parent || !parent->children) return;
+
+    for (TreeNode* i = parent->children; i; i = i->next) {
+        for (TreeNode* j = i->next; j; j = j->next) {
+            if (i->id > j->id) {
+                int tempId = i->id;
+                char tempName[1001];
+                strcpy(tempName, i->name);
+
+                i->id = j->id;
+                strcpy(i->name, j->name);
+
+                j->id = tempId;
+                strcpy(j->name, tempName);
             }
         }
     }
-
-    // Rebuild sibling links
-    parent->firstchild = childList[0];
-    for (int i = 0; i < count - 1; ++i) {
-        childList[i]->sibling = childList[i + 1];
-    }
-    childList[count - 1]->sibling = NULL;
 }
 
-// Function to sort children by ID
-void sortbyID(treenode* parent) {
-    if (parent == NULL || parent->firstchild == NULL) return; //if parents and kid are null
+// Sort children by name
+void sortChildrenByName(TreeNode* parent) {
+    if (!parent || !parent->children) return;
 
-    treenode* childList[100]; // array of children
-    int count = 0;
+    for (TreeNode* i = parent->children; i; i = i->next) {
+        for (TreeNode* j = i->next; j; j = j->next) {
+            if (strcmp(i->name, j->name) > 0) {
+                int tempId = i->id;
+                char tempName[1001];
+                strcpy(tempName, i->name);
 
-    // First, put all children into array
-    treenode* temp = parent->firstchild;
-    while (temp != NULL) {
-        childList[count++] = temp;
-        temp = temp->sibling;
-    }
+                i->id = j->id;
+                strcpy(i->name, j->name);
 
-    // Sort array by ID
-    for (int i = 0; i < count - 1; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (childList[i]->ID > childList[j]->ID) {
-                treenode* swap = childList[i];
-                childList[i] = childList[j];
-                childList[j] = swap;
+                j->id = tempId;
+                strcpy(j->name, tempName);
             }
         }
     }
-
-    // Rebuild sibling links
-    parent->firstchild = childList[0];
-    for (int i = 0; i < count - 1; ++i) {
-        childList[i]->sibling = childList[i + 1];
-    }
-    childList[count - 1]->sibling = NULL;
 }
 
-int main()
-{
-    int num_employees;
-    
-    scanf("%d",&num_employees);
+int main() {
+    int n;
+    scanf("%d", &n);
 
-    treenode* root = createNode(0, "CEO");
-    
-    
-    treenode* root = createNode(0, "CEO");
+    TreeNode* nodes[n];
+    TreeNode* root = NULL;
 
-    // Read employees and commands
-    for (int i = 0; i < num_employees; i++) {
+    for (int i = 0; i < n; i++) {
         int id;
         char name[1001];
-        scanf("%d %1000s", &id, name);
-        if (id == 0) continue; // Root already created
-        treenode* node = createNode(id, name);
-        // Add node to the root as a temporary placeholder
-        addNode(root, node);
+        scanf("%d %s", &id, name);
+        nodes[i] = createNode(id, name);
+        if (id == 0) root = nodes[i];  // Set the root node
     }
 
-    char command[10];
-    int x, y;
+    char command[20];
     while (scanf("%s", command) != EOF) {
-        if (strcmp(command, "ADD") == 0 || strcmp(command, "MOVE") == 0) {
+        if (strcmp(command, "ADD") == 0) {
+            int x, y;
             scanf("%d %d", &x, &y);
-            executeCommand(root, command, x, y);
-        } else if (strcmp(command, "REMOVE") == 0 || strcmp(command, "SORT_ID") == 0 || strcmp(command, "SORT_NAME") == 0 || strcmp(command, "PRINT") == 0) {
+            TreeNode* parent = findNode(root, x);
+            TreeNode* child = NULL;
+            for (int i = 0; i < n; i++) {
+                if (nodes[i]->id == y) {
+                    child = nodes[i];
+                    break;
+                }
+            }
+            if (!parent || !child) {
+                fprintf(stderr, "Invalid ADD operation: parent or child node not found\n");
+                continue;
+            }
+            addChild(parent, child);
+        } else if (strcmp(command, "REMOVE") == 0) {
+            int x;
             scanf("%d", &x);
-            executeCommand(root, command, x, 0);
+            removeNode(root, x);
+        } else if (strcmp(command, "SORT_ID") == 0) {
+            int x;
+            scanf("%d", &x);
+            TreeNode* node = findNode(root, x);
+            if (node) sortChildrenById(node);
+        } else if (strcmp(command, "SORT_NAME") == 0) {
+            int x;
+            scanf("%d", &x);
+            TreeNode* node = findNode(root, x);
+            if (node) sortChildrenByName(node);
+        } else if (strcmp(command, "PRINT") == 0) {
+            int x;
+            scanf("%d", &x);
+            TreeNode* node = findNode(root, x);
+            printChildren(node);
         }
     }
 
-    
-    
     return 0;
 }
