@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Define the structure for a tree node
+// Node Struct
 typedef struct TreeNode {
     int id;
     char name[1001];
@@ -104,15 +104,15 @@ void sortChildrenById(TreeNode* parent) {
     for (TreeNode* i = parent->children; i; i = i->next) {
         for (TreeNode* j = i->next; j; j = j->next) {
             if (i->id > j->id) {
-                int tempId = i->id;
-                char tempName[1001];
-                strcpy(tempName, i->name);
-
-                i->id = j->id;
-                strcpy(i->name, j->name);
-
-                j->id = tempId;
-                strcpy(j->name, tempName);
+                    int tempId = i->id;
+                    char tempName[1001];
+                    strcpy(tempName, i->name);
+    
+                    i->id = j->id;
+                    strcpy(i->name, j->name);
+    
+                    j->id = tempId;
+                    strcpy(j->name, tempName);
             }
         }
     }
